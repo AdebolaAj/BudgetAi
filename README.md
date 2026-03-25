@@ -58,6 +58,4 @@ BudgetAI currently focuses on:
 - onboarding and financial-profile capture
 - dashboard-style budget monitoring
 - transaction-aware reporting
-- early tax-aware income estimation
 
-It is not yet a full financial planning platform, accounting system, or production-grade tax engine.

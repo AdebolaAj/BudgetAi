@@ -19,6 +19,12 @@ type ReportComparisonsProps = {
   monthlyBalance: number;
   annualSavingsGoal: number;
   currentSavings: number;
+  comparisonSpending?: {
+    monthly: number;
+    threeMonths: number;
+    sixMonths: number;
+    yearly: number;
+  };
 };
 
 export default function ReportComparisons({
@@ -28,15 +34,27 @@ export default function ReportComparisons({
   monthlyBalance,
   annualSavingsGoal,
   currentSavings,
+  comparisonSpending,
 }: ReportComparisonsProps) {
   const [selectedRange, setSelectedRange] = useState<RangeKey>('monthly');
   const currentRange = rangeOptions.find((option) => option.key === selectedRange) ?? rangeOptions[0];
 
   const income = monthlyIncome * currentRange.months;
-  const expenses = monthlyExpenses * currentRange.months;
+  const plaidRangeExpenses =
+    selectedRange === 'monthly'
+      ? comparisonSpending?.monthly
+      : selectedRange === '3months'
+        ? comparisonSpending?.threeMonths
+        : selectedRange === '6months'
+          ? comparisonSpending?.sixMonths
+          : comparisonSpending?.yearly;
+  const expenses = plaidRangeExpenses && plaidRangeExpenses > 0
+    ? plaidRangeExpenses
+    : monthlyExpenses * currentRange.months;
   const surplus = monthlyBalance * currentRange.months;
   const goalTarget = (annualSavingsGoal / 12) * currentRange.months;
   const projectedSavings = Math.max(currentSavings + surplus, 0);
+  const isUsingPlaidSpending = Boolean(plaidRangeExpenses && plaidRangeExpenses > 0);
 
   return (
     <div className="surface-card rounded-[2.5rem] p-8">
@@ -87,7 +105,11 @@ export default function ReportComparisons({
           <p className="mt-3 text-3xl font-semibold text-slate-950">
             {formatCurrency(expenses, currency)}
           </p>
-          <p className="mt-2 text-sm text-slate-600">Projected recurring spend across the same period.</p>
+          <p className="mt-2 text-sm text-slate-600">
+            {isUsingPlaidSpending
+              ? 'Actual synced Plaid spend across the selected period.'
+              : 'Projected recurring spend across the same period.'}
+          </p>
         </div>
         <div className="rounded-[1.75rem] bg-white p-5 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">

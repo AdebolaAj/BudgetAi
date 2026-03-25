@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { emptyFinancialProfile, type FinancialProfile } from '@/lib/financialProfile';
+import { searchLocationOptions } from '@/lib/locationOptions';
+import PlaidConnectButton from '@/components/PlaidConnectButton';
 
 const stepDetails = [
   {
@@ -14,8 +16,8 @@ const stepDetails = [
   {
     id: 2,
     eyebrow: 'Step 2',
-    title: 'Income and obligations',
-    description: 'Capture the recurring costs that shape your monthly decisions.',
+    title: 'Plaid and income',
+    description: 'Connect Plaid first, then add the income figure BudgetAI should use as your planning baseline.',
   },
   {
     id: 3,
@@ -49,6 +51,10 @@ export default function OnboardingForm() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [step, setStep] = useState(1);
+  const [hasConnectedPlaidItem, setHasConnectedPlaidItem] = useState(false);
+  const [activeLocationField, setActiveLocationField] = useState<'userLocation' | 'workLocation' | null>(
+    null
+  );
 
   const [formData, setFormData] = useState<FinancialProfile>(emptyFinancialProfile);
 
@@ -78,6 +84,15 @@ export default function OnboardingForm() {
           ...prev,
           ...data.profile,
         }));
+
+        const plaidResponse = await fetch('/api/plaid/status', {
+          credentials: 'include',
+        });
+
+        if (plaidResponse.ok) {
+          const plaidData = (await plaidResponse.json()) as { hasConnectedItem?: boolean };
+          setHasConnectedPlaidItem(Boolean(plaidData.hasConnectedItem));
+        }
       } catch (error) {
         console.error('Failed to load saved financial profile:', error);
         setErrorMessage('Failed to load your saved financial profile.');
@@ -140,6 +155,8 @@ export default function OnboardingForm() {
   const currentStep = stepDetails[step - 1];
   const incomeDetails =
     incomeFrequencyDetails[formData.frequency as keyof typeof incomeFrequencyDetails];
+  const userLocationOptions = searchLocationOptions(formData.currency, formData.userLocation);
+  const workLocationOptions = searchLocationOptions(formData.currency, formData.workLocation, true);
 
   return (
     <div className="min-h-screen px-4 py-10 sm:py-14">
@@ -252,40 +269,55 @@ export default function OnboardingForm() {
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="userLocation"
-                      className="mb-2 block text-sm font-medium text-slate-700"
-                    >
-                      User Location
+                    <label htmlFor="phoneNumber" className="mb-2 block text-sm font-medium text-slate-700">
+                      Phone Number
                     </label>
                     <input
-                      type="text"
-                      id="userLocation"
-                      name="userLocation"
-                      value={formData.userLocation}
+                      type="tel"
+                      id="phoneNumber"
+                      name="phoneNumber"
+                      value={formData.phoneNumber}
                       onChange={handleChange}
                       required
                       className="input-shell"
-                      placeholder="New York, NY"
+                      placeholder="(555) 555-5555"
                     />
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="workLocation"
-                      className="mb-2 block text-sm font-medium text-slate-700"
-                    >
-                      Work Location
+                    <label htmlFor="taxStatus" className="mb-2 block text-sm font-medium text-slate-700">
+                      Tax Status
                     </label>
-                    <input
-                      type="text"
-                      id="workLocation"
-                      name="workLocation"
-                      value={formData.workLocation}
+                    <select
+                      id="taxStatus"
+                      name="taxStatus"
+                      value={formData.taxStatus}
                       onChange={handleChange}
                       required
                       className="input-shell"
-                      placeholder="Brooklyn, NY or Remote"
+                    >
+                      <option value="">Select tax status</option>
+                      <option value="single">Single</option>
+                      <option value="married_filing_jointly">Married Filing Jointly</option>
+                      <option value="married_filing_separately">Married Filing Separately</option>
+                      <option value="head_of_household">Head of Household</option>
+                      <option value="qualifying_surviving_spouse">Qualifying Surviving Spouse</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label htmlFor="address" className="mb-2 block text-sm font-medium text-slate-700">
+                      Address
+                    </label>
+                    <input
+                      type="text"
+                      id="address"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleChange}
+                      required
+                      className="input-shell"
+                      placeholder="123 Main Street, Brooklyn, NY 11201"
                     />
                   </div>
 
@@ -307,11 +339,123 @@ export default function OnboardingForm() {
                       <option value="AUD">AUD (A$)</option>
                     </select>
                   </div>
+
+                  <div className="relative">
+                    <label
+                      htmlFor="userLocation"
+                      className="mb-2 block text-sm font-medium text-slate-700"
+                    >
+                      User Location
+                    </label>
+                    <input
+                      type="text"
+                      id="userLocation"
+                      name="userLocation"
+                      value={formData.userLocation}
+                      onChange={handleChange}
+                      onFocus={() => setActiveLocationField('userLocation')}
+                      onBlur={() => {
+                        window.setTimeout(() => setActiveLocationField((current) => (
+                          current === 'userLocation' ? null : current
+                        )), 120);
+                      }}
+                      required
+                      className="input-shell"
+                      placeholder="Start typing your city"
+                    />
+                    {activeLocationField === 'userLocation' && userLocationOptions.length > 0 && (
+                      <div className="absolute z-20 mt-2 max-h-64 w-full overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
+                        {userLocationOptions.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              setFormData((prev) => ({
+                                ...prev,
+                                userLocation: option,
+                              }));
+                              setActiveLocationField(null);
+                            }}
+                            className="w-full rounded-[1rem] px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-teal-50 hover:text-teal-800"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      Suggestions update based on the currency country you selected.
+                    </p>
+                  </div>
+
+                  <div className="relative">
+                    <label
+                      htmlFor="workLocation"
+                      className="mb-2 block text-sm font-medium text-slate-700"
+                    >
+                      Work Location
+                    </label>
+                    <input
+                      type="text"
+                      id="workLocation"
+                      name="workLocation"
+                      value={formData.workLocation}
+                      onChange={handleChange}
+                      onFocus={() => setActiveLocationField('workLocation')}
+                      onBlur={() => {
+                        window.setTimeout(() => setActiveLocationField((current) => (
+                          current === 'workLocation' ? null : current
+                        )), 120);
+                      }}
+                      required
+                      className="input-shell"
+                      placeholder="Start typing your work city"
+                    />
+                    {activeLocationField === 'workLocation' && workLocationOptions.length > 0 && (
+                      <div className="absolute z-20 mt-2 max-h-64 w-full overflow-y-auto rounded-[1.5rem] border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
+                        {workLocationOptions.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              setFormData((prev) => ({
+                                ...prev,
+                                workLocation: option,
+                              }));
+                              setActiveLocationField(null);
+                            }}
+                            className="w-full rounded-[1rem] px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-teal-50 hover:text-teal-800"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      Pick a suggested city, or choose Remote if that fits your setup.
+                    </p>
+                  </div>
                 </div>
               )}
 
               {step === 2 && (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="md:col-span-2 rounded-[1.75rem] border border-teal-200 bg-teal-50/80 p-5">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">
+                          Plaid Connection
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                          Connect your bank here if you want BudgetAI to layer in live institution access later.
+                        </p>
+                      </div>
+                      <PlaidConnectButton initialHasConnectedItem={hasConnectedPlaidItem} />
+                    </div>
+                  </div>
+
                   <div>
                     <label htmlFor="frequency" className="mb-2 block text-sm font-medium text-slate-700">
                       Income Type
@@ -346,79 +490,35 @@ export default function OnboardingForm() {
                     <p className="mt-2 text-sm leading-6 text-slate-500">{incomeDetails.hint}</p>
                   </div>
 
-                  <div>
-                    <label htmlFor="monthlyRent" className="mb-2 block text-sm font-medium text-slate-700">
-                      Monthly Rent / Mortgage
-                    </label>
-                    <input
-                      type="number"
-                      id="monthlyRent"
-                      name="monthlyRent"
-                      value={formData.monthlyRent}
-                      onChange={handleChange}
-                      className="input-shell"
-                      placeholder="1500"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="monthlyBills" className="mb-2 block text-sm font-medium text-slate-700">
-                      Bills
-                    </label>
-                    <input
-                      type="number"
-                      id="monthlyBills"
-                      name="monthlyBills"
-                      value={formData.monthlyBills}
-                      onChange={handleChange}
-                      className="input-shell"
-                      placeholder="300"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="monthlyUtilities" className="mb-2 block text-sm font-medium text-slate-700">
-                      Utilities
-                    </label>
-                    <input
-                      type="number"
-                      id="monthlyUtilities"
-                      name="monthlyUtilities"
-                      value={formData.monthlyUtilities}
-                      onChange={handleChange}
-                      className="input-shell"
-                      placeholder="150"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label htmlFor="monthlyInsurance" className="mb-2 block text-sm font-medium text-slate-700">
-                      Pre-tax Insurance Premiums
-                    </label>
-                    <input
-                      type="number"
-                      id="monthlyInsurance"
-                      name="monthlyInsurance"
-                      value={formData.monthlyInsurance}
-                      onChange={handleChange}
-                      className="input-shell"
-                      placeholder="200"
-                    />
-                    <p className="mt-2 text-sm leading-6 text-slate-500">
-                      This will be treated as a pre-tax payroll deduction before estimating take-home pay.
-                    </p>
-                  </div>
                 </div>
               )}
 
               {step === 3 && (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
+                  <label htmlFor="monthlyInsurance" className="mb-2 block text-sm font-medium text-slate-700">
+                    Pre-tax Insurance Premiums
+                  </label>
+                  <input
+                    type="number"
+                    id="monthlyInsurance"
+                    name="monthlyInsurance"
+                    value={formData.monthlyInsurance}
+                    onChange={handleChange}
+                    className="input-shell"
+                    placeholder="200"
+                  />
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Used to reduce taxable pay before estimating take-home income.
+                  </p>
+                </div>
+
+                <div>
                   <label
                     htmlFor="monthlyFoodBudget"
                     className="mb-2 block text-sm font-medium text-slate-700"
                   >
-                    Food Budget
+                    Food Monthly Cap
                   </label>
                   <input
                     type="number"
@@ -436,7 +536,7 @@ export default function OnboardingForm() {
                     htmlFor="monthlyTransport"
                     className="mb-2 block text-sm font-medium text-slate-700"
                   >
-                    Transportation
+                    Transportation Monthly Cap
                   </label>
                   <input
                     type="number"
@@ -454,7 +554,7 @@ export default function OnboardingForm() {
                     htmlFor="monthlyEntertainment"
                     className="mb-2 block text-sm font-medium text-slate-700"
                   >
-                    Entertainment & Dining
+                    Entertainment & Dining Monthly Cap
                   </label>
                   <input
                     type="number"
@@ -469,7 +569,7 @@ export default function OnboardingForm() {
 
                 <div>
                   <label htmlFor="monthlyPlans" className="mb-2 block text-sm font-medium text-slate-700">
-                    Subscriptions
+                    Subscriptions Monthly Cap
                   </label>
                   <input
                     type="number"
@@ -487,7 +587,7 @@ export default function OnboardingForm() {
                     htmlFor="monthlyDonations"
                     className="mb-2 block text-sm font-medium text-slate-700"
                   >
-                    Donations
+                    Donations Monthly Cap
                   </label>
                   <input
                     type="number"
@@ -571,7 +671,7 @@ export default function OnboardingForm() {
           )}
 
           <p className="mt-6 text-sm leading-6 text-slate-500">
-            You can revise these numbers later as your income, goals, or obligations change.
+            You can revise these monthly caps later as your income, goals, or spending targets change.
           </p>
         </section>
       </div>

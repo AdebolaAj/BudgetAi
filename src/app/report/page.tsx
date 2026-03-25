@@ -3,16 +3,26 @@ import ReportComparisons from '@/components/ReportComparisons';
 import { formatCurrency } from '@/lib/financialProfile';
 import { getProfileData } from '@/lib/profileData';
 
-const spendingKeys = [
-  { label: 'Rent / Mortgage', key: 'monthlyRent' },
-  { label: 'Bills', key: 'monthlyBills' },
-  { label: 'Food', key: 'monthlyFoodBudget' },
-  { label: 'Transport', key: 'monthlyTransport' },
-  { label: 'Utilities', key: 'monthlyUtilities' },
-  { label: 'Subscriptions', key: 'monthlyPlans' },
-  { label: 'Donations', key: 'monthlyDonations' },
-  { label: 'Entertainment', key: 'monthlyEntertainment' },
-] as const;
+function getBudgetCapForLabel(
+  label: string,
+  budgetCaps: {
+    food: number;
+    transport: number;
+    entertainment: number;
+    subscriptions: number;
+    donations: number;
+  }
+) {
+  const normalized = label.trim().toUpperCase();
+
+  if (normalized.includes('FOOD')) return budgetCaps.food;
+  if (normalized.includes('TRANSPORT') || normalized.includes('TRAVEL')) return budgetCaps.transport;
+  if (normalized.includes('ENTERTAINMENT') || normalized.includes('DINING')) return budgetCaps.entertainment;
+  if (normalized.includes('SUBSCRIPTION')) return budgetCaps.subscriptions;
+  if (normalized.includes('DONATION')) return budgetCaps.donations;
+
+  return null;
+}
 
 export default async function ReportPage() {
   const data = await getProfileData();
@@ -38,13 +48,8 @@ export default async function ReportPage() {
     );
   }
 
-  const { profile, report } = data;
-  const spendingBreakdown = spendingKeys
-    .map((item) => ({
-      label: item.label,
-      value: Number(profile[item.key]) || 0,
-    }))
-    .filter((item) => item.value > 0);
+  const { profile, report, plaidSpendingBreakdown, comparisonSpending, budgetCaps } = data;
+  const spendingBreakdown = plaidSpendingBreakdown;
 
   const maxSpendingValue = Math.max(...spendingBreakdown.map((item) => item.value), 1);
   const savingsGoalProgress = report.annualSavingsGoal > 0
@@ -160,25 +165,43 @@ export default async function ReportPage() {
 
             <div className="mt-8 space-y-5">
               {spendingBreakdown.length > 0 ? (
-                spendingBreakdown.map((item) => (
+                spendingBreakdown.map((item) => {
+                  const budgetValue = getBudgetCapForLabel(item.label, budgetCaps) ?? 0;
+                  const hasExpectedCap = budgetValue > 0;
+                  const isOverBudget = hasExpectedCap ? item.value > budgetValue : false;
+                  const overBy = isOverBudget ? item.value - budgetValue : 0;
+
+                  return (
                   <div key={item.label}>
                     <div className="mb-2 flex items-center justify-between gap-4">
                       <p className="text-sm font-medium text-slate-700">{item.label}</p>
-                      <p className="text-sm font-semibold text-slate-950">
+                      <p className={`text-sm font-semibold ${isOverBudget ? 'text-red-700' : 'text-slate-950'}`}>
                         {formatCurrency(item.value, profile.currency)}
                       </p>
                     </div>
                     <div className="h-3 rounded-full bg-slate-100">
                       <div
-                        className="h-3 rounded-full bg-gradient-to-r from-teal-600 to-emerald-500"
+                        className={
+                          isOverBudget
+                            ? 'h-3 rounded-full bg-gradient-to-r from-red-500 to-rose-500'
+                            : 'h-3 rounded-full bg-gradient-to-r from-teal-600 to-emerald-500'
+                        }
                         style={{ width: `${Math.max((item.value / maxSpendingValue) * 100, 10)}%` }}
                       />
                     </div>
+                    {hasExpectedCap ? (
+                      <p className={`mt-2 text-sm ${isOverBudget ? 'text-red-700' : 'text-slate-500'}`}>
+                        {isOverBudget
+                          ? `Expected cap ${formatCurrency(budgetValue, profile.currency)} • Over by ${formatCurrency(overBy, profile.currency)}`
+                          : `Expected cap ${formatCurrency(budgetValue, profile.currency)}`}
+                      </p>
+                    ) : null}
                   </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="rounded-[1.75rem] bg-white p-6 text-slate-600 shadow-sm">
-                  Add spending inputs in your financial profile to populate the monthly spending chart.
+                  Connect Plaid and sync transactions to populate the monthly spending chart from actual account history.
                 </div>
               )}
             </div>
@@ -192,6 +215,7 @@ export default async function ReportPage() {
           monthlyBalance={report.monthlyBalance}
           annualSavingsGoal={report.annualSavingsGoal}
           currentSavings={report.currentSavings}
+          comparisonSpending={comparisonSpending}
         />
       </div>
     </main>

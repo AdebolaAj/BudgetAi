@@ -1,5 +1,14 @@
 export type FinancialProfile = {
   fullName: string;
+  phoneNumber: string;
+  address: string;
+  taxStatus:
+    | ''
+    | 'single'
+    | 'married_filing_jointly'
+    | 'married_filing_separately'
+    | 'head_of_household'
+    | 'qualifying_surviving_spouse';
   salary: string;
   frequency: 'hourly' | 'monthly' | 'yearly';
   userLocation: string;
@@ -40,6 +49,7 @@ export type FinancialReport = {
   currentFocus: string;
   focusMessage: string;
   recommendation: string;
+  expenseSourceNote: string;
   stats: Array<{
     label: string;
     value: string;
@@ -48,7 +58,15 @@ export type FinancialReport = {
   }>;
 };
 
+type FinancialReportOptions = {
+  monthlyExpensesOverride?: number;
+  expenseSourceNote?: string;
+};
+
 export type FinancialProfileRow = {
+  phone_number: string;
+  address: string;
+  tax_status: FinancialProfile['taxStatus'];
   frequency: FinancialProfile['frequency'];
   salary: string;
   user_location: string;
@@ -166,6 +184,9 @@ const round = (value: number) => Math.round(value * 100) / 100;
 
 export const emptyFinancialProfile: FinancialProfile = {
   fullName: '',
+  phoneNumber: '',
+  address: '',
+  taxStatus: '',
   salary: '',
   frequency: 'monthly',
   userLocation: '',
@@ -199,6 +220,9 @@ export function financialProfileFromRow(
 ): FinancialProfile {
   return {
     fullName,
+    phoneNumber: row.phone_number,
+    address: row.address,
+    taxStatus: row.tax_status,
     salary: row.salary,
     frequency: row.frequency,
     userLocation: row.user_location,
@@ -427,7 +451,10 @@ function getStateAndLocalAnnualTaxes(profile: FinancialProfile, annualTaxableInc
   return { annualStateTax, annualLocalTax, note };
 }
 
-export function buildFinancialReport(profile: FinancialProfile): FinancialReport {
+export function buildFinancialReport(
+  profile: FinancialProfile,
+  options: FinancialReportOptions = {}
+): FinancialReport {
   const grossMonthlyIncome = normalizeMonthlyIncome(profile);
   const grossAnnualIncome = grossMonthlyIncome * 12;
   const monthlyRent = toNumber(profile.monthlyRent);
@@ -442,6 +469,15 @@ export function buildFinancialReport(profile: FinancialProfile): FinancialReport
   const currentSavings = toNumber(profile.currentSavings);
   const annualSavingsGoal = toNumber(profile.savingsGoal);
   const annualPretaxInsurance = monthlyPretaxInsurance * 12;
+  const monthlyCapTotal =
+    monthlyRent +
+    monthlyBills +
+    monthlyFoodBudget +
+    monthlyTransport +
+    monthlyUtilities +
+    monthlyPlans +
+    monthlyDonations +
+    monthlyEntertainment;
 
   const incomeTypeNote =
     profile.frequency === 'hourly'
@@ -474,20 +510,13 @@ export function buildFinancialReport(profile: FinancialProfile): FinancialReport
     estimatedMonthlyStateLocalTaxes;
   const monthlyIncome = Math.max(grossMonthlyIncome - monthlyPretaxInsurance - estimatedMonthlyTaxes, 0);
 
-  const monthlyExpenses =
-    monthlyRent +
-    monthlyBills +
-    monthlyFoodBudget +
-    monthlyTransport +
-    monthlyUtilities +
-    monthlyPlans +
-    monthlyDonations +
-    monthlyEntertainment;
+  const monthlyExpenses = options.monthlyExpensesOverride ?? monthlyCapTotal;
 
   const monthlyBalance = monthlyIncome - monthlyExpenses;
-  const monthlyBudget = monthlyExpenses + Math.max(annualSavingsGoal / 12, 0);
+  const monthlyBudget = monthlyCapTotal + Math.max(annualSavingsGoal / 12, 0);
   const essentials = monthlyRent + monthlyBills + monthlyUtilities + monthlyFoodBudget + monthlyTransport;
   const essentialsShare = monthlyExpenses > 0 ? Math.round((essentials / monthlyExpenses) * 100) : 0;
+  const expenseSourceNote = options.expenseSourceNote ?? `${essentialsShare}% of spend is essential`;
   const savingsRate = monthlyIncome > 0 ? Math.round((Math.max(monthlyBalance, 0) / monthlyIncome) * 100) : 0;
   const savingsGap = Math.max(annualSavingsGoal - currentSavings, 0);
 
@@ -538,6 +567,7 @@ export function buildFinancialReport(profile: FinancialProfile): FinancialReport
     currentFocus,
     focusMessage,
     recommendation,
+    expenseSourceNote,
     stats: [
       {
         label: 'Gross Income',
@@ -567,7 +597,7 @@ export function buildFinancialReport(profile: FinancialProfile): FinancialReport
         label: 'Total Expenses',
         value: formatCurrency(monthlyExpenses, currency),
         tone: 'bg-amber-50 text-amber-700',
-        note: `${essentialsShare}% of spend is essential`,
+        note: expenseSourceNote,
       },
       {
         label: 'Balance',
@@ -579,7 +609,10 @@ export function buildFinancialReport(profile: FinancialProfile): FinancialReport
         label: 'Monthly Budget',
         value: formatCurrency(monthlyBudget, currency),
         tone: 'bg-rose-50 text-rose-700',
-        note: annualSavingsGoal > 0 ? 'Includes your savings target pace' : 'Based on current expense inputs',
+        note:
+          annualSavingsGoal > 0
+            ? 'Built from your monthly caps plus savings target pace'
+            : 'Built from your entered monthly caps',
       },
     ],
   };

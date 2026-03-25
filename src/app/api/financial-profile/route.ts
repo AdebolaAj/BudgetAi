@@ -22,6 +22,9 @@ export async function GET() {
     const result = await pool.query<FinancialProfileRow>(
       `
         SELECT
+          phone_number,
+          address,
+          tax_status,
           frequency,
           salary,
           user_location,
@@ -88,6 +91,9 @@ export async function PUT(request: Request) {
       `
         INSERT INTO financial_profiles (
           user_id,
+          phone_number,
+          address,
+          tax_status,
           frequency,
           salary,
           user_location,
@@ -110,9 +116,12 @@ export async function PUT(request: Request) {
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW()
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW()
         )
         ON CONFLICT (user_id) DO UPDATE SET
+          phone_number = EXCLUDED.phone_number,
+          address = EXCLUDED.address,
+          tax_status = EXCLUDED.tax_status,
           frequency = EXCLUDED.frequency,
           salary = EXCLUDED.salary,
           user_location = EXCLUDED.user_location,
@@ -135,6 +144,9 @@ export async function PUT(request: Request) {
       `,
       [
         user.id,
+        body.phoneNumber,
+        body.address,
+        body.taxStatus,
         body.frequency,
         body.salary,
         body.userLocation,

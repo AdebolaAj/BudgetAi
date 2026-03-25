@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import PlaidSyncButton from '@/components/PlaidSyncButton';
 import TransactionEntryForm from '@/components/TransactionEntryForm';
 import { formatCurrency } from '@/lib/financialProfile';
 import { getProfileData } from '@/lib/profileData';
@@ -29,7 +30,12 @@ export default async function ProfilePage() {
     );
   }
 
-  const { profile, report, transactionEntries, transactionNet } = data;
+  const { profile, report, transactionEntries, transactionNet, plaidTransactions } = data;
+  const missingProfileFields = [
+    !profile.phoneNumber ? 'phone number' : null,
+    !profile.address ? 'address' : null,
+    !profile.taxStatus ? 'tax status' : null,
+  ].filter(Boolean) as string[];
 
   return (
     <main className="min-h-screen px-4 py-10 sm:py-14">
@@ -119,6 +125,24 @@ export default async function ProfilePage() {
           </aside>
 
           <div className="space-y-8">
+            {missingProfileFields.length > 0 && (
+              <div className="rounded-[2rem] border border-amber-200 bg-amber-50 px-6 py-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">
+                      Profile update needed
+                    </p>
+                    <p className="mt-2 text-base leading-7 text-slate-700">
+                      Add your {missingProfileFields.join(', ')} to complete your financial profile.
+                    </p>
+                  </div>
+                  <Link href="/setup" className="primary-button px-6 py-3 text-sm whitespace-nowrap">
+                    Update Profile
+                  </Link>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               {report.stats.map((stat) => (
                 <div key={stat.label} className="surface-card rounded-[2rem] p-6">
@@ -195,6 +219,68 @@ export default async function ProfilePage() {
                 ) : (
                   <div className="rounded-[1.75rem] bg-white p-6 text-slate-600 shadow-sm">
                     No credit or debit entries yet. Add your first manual adjustment to change the reported balance.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="surface-card rounded-[2.5rem] p-8">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
+                    Linked account activity
+                  </p>
+                  <h3 className="mt-3 text-3xl font-semibold text-slate-950">
+                    Recent Plaid transactions.
+                  </h3>
+                </div>
+                <PlaidSyncButton />
+              </div>
+
+              <div className="mt-8 space-y-4">
+                {plaidTransactions.length > 0 ? (
+                  plaidTransactions.map((transaction) => (
+                    <div key={transaction.transaction_id} className="rounded-[1.5rem] bg-white p-5 shadow-sm">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {transaction.institution_name ? (
+                              <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
+                                {transaction.institution_name}
+                              </span>
+                            ) : null}
+                            {transaction.category_primary ? (
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+                                {transaction.category_primary.replaceAll('_', ' ')}
+                              </span>
+                            ) : null}
+                            {transaction.pending ? (
+                              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                                Pending
+                              </span>
+                            ) : null}
+                          </div>
+                          <h4 className="mt-3 text-xl font-semibold text-slate-950">
+                            {transaction.merchant_name || transaction.name}
+                          </h4>
+                          <p className="mt-2 text-sm leading-6 text-slate-600">
+                            {transaction.name}
+                            {transaction.category_detailed ? ` • ${transaction.category_detailed.replaceAll('_', ' ')}` : ''}
+                          </p>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-2xl font-semibold text-slate-950">
+                            {formatCurrency(Number(transaction.amount), transaction.iso_currency_code || profile.currency)}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">{transaction.date}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[1.75rem] bg-white p-6 text-slate-600 shadow-sm">
+                    No Plaid transactions synced yet. Connect a bank account and refresh transactions to pull recent activity.
                   </div>
                 )}
               </div>

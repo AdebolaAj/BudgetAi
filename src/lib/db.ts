@@ -51,6 +51,9 @@ export async function ensureDatabaseSetup() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS financial_profiles (
       user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      phone_number TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      tax_status TEXT NOT NULL DEFAULT '',
       frequency TEXT NOT NULL,
       salary TEXT NOT NULL,
       user_location TEXT NOT NULL,
@@ -75,6 +78,13 @@ export async function ensureDatabaseSetup() {
   `);
 
   await pool.query(`
+    ALTER TABLE financial_profiles
+    ADD COLUMN IF NOT EXISTS phone_number TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS tax_status TEXT NOT NULL DEFAULT '';
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS transaction_entries (
       id UUID PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -85,6 +95,46 @@ export async function ensureDatabaseSetup() {
       amount NUMERIC(12, 2) NOT NULL CHECK (amount >= 0),
       occurred_on DATE NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS plaid_items (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      item_id TEXT NOT NULL UNIQUE,
+      access_token TEXT NOT NULL,
+      transactions_cursor TEXT NOT NULL DEFAULT '',
+      institution_id TEXT NOT NULL DEFAULT '',
+      institution_name TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    ALTER TABLE plaid_items
+    ADD COLUMN IF NOT EXISTS transactions_cursor TEXT NOT NULL DEFAULT '';
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS plaid_transactions (
+      transaction_id TEXT PRIMARY KEY,
+      plaid_item_id UUID NOT NULL REFERENCES plaid_items(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      account_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      merchant_name TEXT NOT NULL DEFAULT '',
+      amount NUMERIC(12, 2) NOT NULL,
+      iso_currency_code TEXT NOT NULL DEFAULT 'USD',
+      date DATE NOT NULL,
+      authorized_date DATE,
+      category_primary TEXT NOT NULL DEFAULT '',
+      category_detailed TEXT NOT NULL DEFAULT '',
+      payment_channel TEXT NOT NULL DEFAULT '',
+      pending BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 }

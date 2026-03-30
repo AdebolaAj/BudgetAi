@@ -1,8 +1,10 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { getCurrentSessionUser } from '@/lib/auth';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { ensureDatabaseSetup, getPool } from '@/lib/db';
-import { syncTransactionsForItem } from '@/lib/plaid';
+import { syncAccountsForItem, syncTransactionsForItem } from '@/lib/plaid';
+import { getSameOriginError } from '@/lib/requestSecurity';
 
 type PlaidItemRecord = {
   id: string;
@@ -11,8 +13,13 @@ type PlaidItemRecord = {
   transactions_cursor: string;
 };
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const originError = getSameOriginError(request);
+    if (originError) {
+      return NextResponse.json({ error: originError }, { status: 403 });
+    }
+
     await ensureDatabaseSetup();
     const user = await getCurrentSessionUser();
 
@@ -34,17 +41,24 @@ export async function POST() {
     }
 
     const totals = {
+      accountsCount: 0,
       addedCount: 0,
       modifiedCount: 0,
       removedCount: 0,
     };
 
     for (const item of itemsResult.rows) {
+      totals.accountsCount += await syncAccountsForItem(item);
       const result = await syncTransactionsForItem(item);
       totals.addedCount += result.addedCount;
       totals.modifiedCount += result.modifiedCount;
       totals.removedCount += result.removedCount;
     }
+
+    revalidatePath('/profile');
+    revalidatePath('/report');
+    revalidatePath('/accounts');
+    revalidatePath('/setup');
 
     return NextResponse.json({
       ok: true,

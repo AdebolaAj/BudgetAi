@@ -1,12 +1,21 @@
+import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getCurrentSessionUser } from '@/lib/auth';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { ensureDatabaseSetup, getPool } from '@/lib/db';
-import { getPlaidClient, syncTransactionsForItem } from '@/lib/plaid';
+import { getPlaidClient, syncAccountsForItem, syncTransactionsForItem } from '@/lib/plaid';
+import { getSameOriginError } from '@/lib/requestSecurity';
+import { encryptSecret } from '@/lib/secrets';
+import { plaidExchangeSchema } from '@/lib/validation';
 
 export async function POST(request: Request) {
   try {
+    const originError = getSameOriginError(request);
+    if (originError) {
+      return NextResponse.json({ error: originError }, { status: 403 });
+    }
+
     await ensureDatabaseSetup();
     const user = await getCurrentSessionUser();
 
@@ -14,15 +23,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = (await request.json()) as {
-      publicToken?: string;
-      institutionId?: string;
-      institutionName?: string;
-    };
+    const body = plaidExchangeSchema.parse(await request.json());
 
     const publicToken = body.publicToken?.trim() ?? '';
     if (!publicToken) {
       return NextResponse.json({ error: 'Missing public token.' }, { status: 400 });
+    }
+
+    const institutionId = body.institutionId?.trim() ?? '';
+    const institutionName = body.institutionName?.trim() ?? '';
+    const plaidItemId = body.plaidItemId?.trim() ?? '';
+
+    if (institutionId) {
+      const existingInstitutionResult = await getPool().query<{ id: string }>(
+        `
+          SELECT id
+          FROM plaid_items
+          WHERE user_id = $1
+            AND institution_id = $2
+          LIMIT 1
+        `,
+        [user.id, institutionId]
+      );
+
+      const existingInstitutionItemId = existingInstitutionResult.rows[0]?.id;
+
+      if (existingInstitutionItemId && existingInstitutionItemId !== plaidItemId) {
+        return NextResponse.json(
+          { error: 'This bank is already connected. Use Manage Shared Accounts instead.' },
+          { status: 409 }
+        );
+      }
     }
 
     const exchangeResponse = await getPlaidClient().itemPublicTokenExchange({
@@ -55,14 +86,23 @@ export async function POST(request: Request) {
         randomUUID(),
         user.id,
         exchangeResponse.data.item_id,
-        exchangeResponse.data.access_token,
+        encryptSecret(exchangeResponse.data.access_token),
         '',
-        body.institutionId?.trim() ?? '',
-        body.institutionName?.trim() ?? '',
+        institutionId,
+        institutionName,
       ]
     );
 
+    await syncAccountsForItem(upsertResult.rows[0], {
+      institutionName,
+      selectedAccounts: body.accounts ?? [],
+    });
     await syncTransactionsForItem(upsertResult.rows[0]);
+
+    revalidatePath('/profile');
+    revalidatePath('/report');
+    revalidatePath('/accounts');
+    revalidatePath('/setup');
 
     return NextResponse.json({ ok: true });
   } catch (error) {

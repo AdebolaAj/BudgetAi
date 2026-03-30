@@ -1,4 +1,5 @@
 import {
+  AccountBase,
   Configuration,
   CountryCode,
   PlaidApi,
@@ -8,6 +9,7 @@ import {
   RemovedTransaction,
 } from 'plaid';
 import { getPool } from '@/lib/db';
+import { decryptSecret } from '@/lib/secrets';
 
 declare global {
   var budgetAiPlaidClient: PlaidApi | undefined;
@@ -70,8 +72,132 @@ type PlaidItemRecord = {
   transactions_cursor: string;
 };
 
+export type PlaidLinkedAccount = {
+  id: string;
+  name: string;
+  mask: string;
+  type: string;
+  subtype: string;
+};
+
 function normalizeTransactionDate(value?: string | null) {
   return value ?? new Date().toISOString().slice(0, 10);
+}
+
+function toNullableNumber(value?: number | null) {
+  return typeof value === 'number' ? value : null;
+}
+
+export async function syncAccountsForItem(
+  item: PlaidItemRecord,
+  options?: {
+    institutionName?: string;
+    selectedAccounts?: PlaidLinkedAccount[];
+  }
+) {
+  const client = getPlaidClient();
+  const pool = getPool();
+  const accountsResponse = await client.accountsGet({
+    access_token: decryptSecret(item.access_token),
+  });
+  const selectedAccountIds = new Set((options?.selectedAccounts ?? []).map((account) => account.id));
+  const hasExplicitSelection = selectedAccountIds.size > 0;
+
+  for (const account of accountsResponse.data.accounts) {
+    const isSelected = hasExplicitSelection ? selectedAccountIds.has(account.account_id) : true;
+
+    await upsertPlaidAccount(
+      pool,
+      item,
+      account,
+      options?.institutionName ?? '',
+      isSelected
+    );
+  }
+
+  const returnedAccountIds = accountsResponse.data.accounts.map((account) => account.account_id);
+
+  if (returnedAccountIds.length > 0) {
+    await pool.query(
+      `
+        UPDATE plaid_accounts
+        SET is_active = FALSE, updated_at = NOW()
+        WHERE plaid_item_id = $1
+          AND account_id <> ALL($2::text[])
+      `,
+      [item.id, returnedAccountIds]
+    );
+  }
+
+  return accountsResponse.data.accounts.length;
+}
+
+async function upsertPlaidAccount(
+  pool: ReturnType<typeof getPool>,
+  item: PlaidItemRecord,
+  account: AccountBase,
+  institutionName: string,
+  isSelected: boolean
+) {
+  await pool.query(
+    `
+      INSERT INTO plaid_accounts (
+        account_id,
+        plaid_item_id,
+        user_id,
+        institution_name,
+        name,
+        mask,
+        official_name,
+        type,
+        subtype,
+        available_balance,
+        current_balance,
+        credit_limit,
+        iso_currency_code,
+        is_selected,
+        is_active,
+        updated_at
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, TRUE, NOW()
+      )
+      ON CONFLICT (account_id)
+      DO UPDATE SET
+        plaid_item_id = EXCLUDED.plaid_item_id,
+        user_id = EXCLUDED.user_id,
+        institution_name = EXCLUDED.institution_name,
+        name = EXCLUDED.name,
+        mask = EXCLUDED.mask,
+        official_name = EXCLUDED.official_name,
+        type = EXCLUDED.type,
+        subtype = EXCLUDED.subtype,
+        available_balance = EXCLUDED.available_balance,
+        current_balance = EXCLUDED.current_balance,
+        credit_limit = EXCLUDED.credit_limit,
+        iso_currency_code = EXCLUDED.iso_currency_code,
+        is_selected = EXCLUDED.is_selected,
+        is_active = EXCLUDED.is_active,
+        updated_at = NOW()
+    `,
+    [
+      account.account_id,
+      item.id,
+      item.user_id,
+      institutionName,
+      account.name,
+      account.mask ?? '',
+      account.official_name ?? '',
+      account.type,
+      account.subtype ?? '',
+      toNullableNumber(account.balances.available),
+      toNullableNumber(account.balances.current),
+      toNullableNumber(account.balances.limit),
+      account.balances.iso_currency_code ?? 'USD',
+      isSelected,
+    ]
+  );
 }
 
 async function upsertPlaidTransactions(
@@ -163,7 +289,7 @@ export async function syncTransactionsForItem(item: PlaidItemRecord) {
 
   while (hasMore) {
     const response = await client.transactionsSync({
-      access_token: item.access_token,
+      access_token: decryptSecret(item.access_token),
       cursor: cursor || undefined,
     });
 

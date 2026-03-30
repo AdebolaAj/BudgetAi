@@ -1,63 +1,118 @@
 # BudgetAI
 
-BudgetAI is a personal finance app that helps users turn account activity and self-reported goals into a clearer budgeting picture. It combines guided onboarding, income modeling, connected banking data, and lightweight reporting so users can understand what they earn, what they spend, and where they are drifting past plan.
+BudgetAI is a personal finance app that combines user-defined budgeting intent with live bank activity. The product is designed to help users connect their accounts, define monthly caps and goals, and then compare those plans against what is actually happening in their transaction history.
 
-## What The App Does
+Instead of treating budgeting as a static spreadsheet exercise, BudgetAI blends three signals:
 
-BudgetAI is built around a simple flow:
+- financial profile data entered by the user
+- synced account and transaction data from Plaid
+- AI-assisted guidance layered on top of real numbers
 
-- users create an account and save a financial profile
-- users enter identity, tax, income, savings, and monthly cap information
-- users can connect Plaid to pull transaction history
-- the dashboard summarizes income, spending, taxes, balance, and recent activity
-- the report page visualizes monthly spending and compares actual transactions against expected caps
+The result is a dashboard that is meant to feel more like an operating view of a user’s finances than a one-time form or passive report.
 
-The app is designed to mix two inputs:
+## Product Experience
 
-- profile data entered by the user, such as income and monthly category caps
-- live transaction history from connected financial accounts
+BudgetAI is organized around a simple flow:
 
-That allows BudgetAI to treat user-entered values as intent and transaction history as actual behavior.
+- create an account and complete a guided financial profile
+- connect one or more banks or cards through Plaid
+- define monthly category caps and savings goals
+- track real inflows, spending, rent, utilities, and savings balances
+- compare actual spending against expected caps in a dedicated report view
+- open AI deep dives on the current focus area for more specific budgeting guidance
 
-## Tech Stack
+The app separates planning values from observed cash movement:
 
-BudgetAI is a full-stack TypeScript app built with:
+- manual inputs represent expected caps, goals, and planning assumptions
+- Plaid transactions represent actual account behavior
+- linked savings balances replace manual savings entry
 
-- Next.js 16 App Router for the web application and API routes
-- React 19 for the client UI
-- Tailwind CSS 4 for styling
-- PostgreSQL for persistence
-- Plaid for account linking and transaction sync
-- `country-state-city` for location autocomplete and normalized city suggestions
+That distinction keeps the dashboard grounded in real account activity without losing the user’s original budget targets.
 
 ## Core Features
 
-- Account creation, sign in, sign out, and session-based authentication
-- Postgres-backed financial profile storage
-- Multi-step onboarding with editable saved values
-- Income support for hourly, monthly, and yearly pay
-- Estimated take-home income with federal payroll tax logic and limited state/local tax support
-- Currency-aware location selection for user and work location
-- Plaid-based account connection and transaction syncing
-- Dashboard cards driven by income data and transaction history
-- Report page with monthly spending bars and longer-range comparisons
-- Category cap comparisons that highlight overspending visually
-- Manual credit/debit entries to adjust displayed balance
+- Account creation, sign in, sign out, and Postgres-backed sessions
+- Guided onboarding for identity, employer, income, tax status, monthly caps, and goals
+- Plaid bank and card linking with support for multiple institutions and multiple shared accounts
+- Linked account summaries and institution-level account views
+- Transaction sync for spending, savings balances, rent, utilities, and paycheck-like inflows
+- Dashboard cards for projected budget, actual cashflow, savings progress, and recent bank activity
+- Report page with period-based spending views:
+  - month
+  - 3 months
+  - 6 months
+  - year
+  - year to date
+- Category cap comparison that highlights overspending visually
+- Goal creation flow from the dashboard
+- Account settings for profile access, password changes, email changes, and subscription-plan selection
+- AI “current focus” deep dive powered by real report data rather than invented values
 
-## Product Notes
+## Tech Stack
 
-- Plaid transaction history is the primary source for spending analysis when available.
-- User-entered category amounts are treated as monthly caps rather than direct expenses.
-- If Plaid is not connected, spending-based report sections fall back to a minimal state instead of inventing expense totals.
-- Tax calculations are planning estimates, not tax filing advice or payroll-grade withholding calculations.
+BudgetAI is built as a full-stack TypeScript application with:
+
+- Next.js 16 App Router for the web app and server routes
+- React 19 for the client interface
+- Tailwind CSS 4 for styling
+- PostgreSQL for persistence
+- Plaid for account linking, account metadata, and transaction sync
+- OpenAI Responses API for grounded financial guidance in the deep-dive workflow
+- `country-state-city` for location autocomplete
+- `zod` for request validation
+
+## Data Model At A High Level
+
+The app’s backend centers around a few main data domains:
+
+- `users` and `sessions` for authentication
+- `financial_profiles` for onboarding and budgeting inputs
+- `plaid_items`, `plaid_accounts`, and `plaid_transactions` for connected institutions and synced activity
+- `goals` for user-created planning targets
+- `rate_limits` for basic application-level abuse protection
+
+This lets BudgetAI support both combined financial views and institution/account-level reporting.
+
+## Security Posture
+
+BudgetAI includes a first pass at application security:
+
+- hashed passwords
+- httpOnly session cookies
+- request validation with `zod`
+- same-origin protection on authenticated mutation routes
+- basic rate limiting on sensitive endpoints
+- encrypted Plaid access tokens at rest
+- session rotation on password change
+
+This is not yet a production-complete security posture. The app still needs stronger email verification flows, better auditability, and more mature operational hardening before it should be treated as a fully production-ready financial platform.
 
 ## Current Scope
 
 BudgetAI currently focuses on:
 
-- onboarding and financial-profile capture
-- dashboard-style budget monitoring
-- transaction-aware reporting
-- early tax-aware income estimation
+- consumer budgeting and spending awareness
+- transaction-backed financial dashboards
+- multi-account visibility
+- goal planning
+- AI-assisted financial explanations
 
-It is not yet a full financial planning platform, accounting system, or production-grade tax engine.
+It is not currently positioned as:
+
+- a bookkeeping system
+- a tax filing platform
+- a brokerage or payments product
+- a fully mature subscription billing platform
+- a complete enterprise-grade banking data warehouse
+
+## Product Direction
+
+The app is already structured to grow into:
+
+- account-level reports by institution or account type
+- richer recurring-income detection
+- deeper goal tracking
+- better budgeting recommendations based on transaction behavior
+- stronger subscription and billing flows
+
+The current implementation aims to establish the core budgeting loop first: connect accounts, set intent, observe reality, and act on the gap.

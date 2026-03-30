@@ -3,13 +3,20 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePlaidLink } from 'react-plaid-link';
+import type { PlaidAccount } from 'react-plaid-link';
 
 interface PlaidConnectButtonProps {
   initialHasConnectedItem?: boolean;
+  plaidItemId?: string;
+  buttonLabel?: string;
+  onConnected?: () => void;
 }
 
 export default function PlaidConnectButton({
   initialHasConnectedItem = false,
+  plaidItemId,
+  buttonLabel,
+  onConnected,
 }: PlaidConnectButtonProps) {
   const router = useRouter();
   const [hasConnectedItem, setHasConnectedItem] = useState(initialHasConnectedItem);
@@ -34,6 +41,14 @@ export default function PlaidConnectButton({
             publicToken,
             institutionId: metadata.institution?.institution_id ?? '',
             institutionName: metadata.institution?.name ?? '',
+            plaidItemId,
+            accounts: metadata.accounts.map((account: PlaidAccount) => ({
+              id: account.id,
+              name: account.name,
+              mask: account.mask ?? '',
+              type: account.type,
+              subtype: account.subtype ?? '',
+            })),
           }),
         });
 
@@ -45,6 +60,7 @@ export default function PlaidConnectButton({
 
         setLinkToken(null);
         setHasConnectedItem(true);
+        onConnected?.();
         router.refresh();
       } catch {
         setError('Failed to connect Plaid.');
@@ -76,6 +92,16 @@ export default function PlaidConnectButton({
     try {
       const response = await fetch('/api/plaid/link-token', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(
+          plaidItemId
+            ? {
+                plaidItemId,
+              }
+            : {}
+        ),
       });
 
       const data = (await response.json()) as { linkToken?: string; error?: string };
@@ -102,7 +128,9 @@ export default function PlaidConnectButton({
         disabled={isLoading}
         className="primary-button px-6 py-3 text-sm whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isLoading ? 'Opening Plaid...' : hasConnectedItem ? 'Connect Another Bank' : 'Connect Bank'}
+        {isLoading
+          ? 'Opening Plaid...'
+          : buttonLabel ?? (hasConnectedItem ? 'Connect Another Bank' : 'Connect Bank')}
       </button>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </div>

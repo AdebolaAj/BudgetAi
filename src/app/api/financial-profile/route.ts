@@ -1,7 +1,10 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { getCurrentSessionUser } from '@/lib/auth';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getPool, ensureDatabaseSetup } from '@/lib/db';
+import { getSameOriginError } from '@/lib/requestSecurity';
+import { financialProfileSchema } from '@/lib/validation';
 import {
   financialProfileFromRow,
   getEmptyFinancialProfile,
@@ -24,6 +27,7 @@ export async function GET() {
         SELECT
           phone_number,
           address,
+          employer_name,
           tax_status,
           frequency,
           salary,
@@ -68,6 +72,11 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const originError = getSameOriginError(request);
+    if (originError) {
+      return NextResponse.json({ error: originError }, { status: 403 });
+    }
+
     await ensureDatabaseSetup();
     const user = await getCurrentSessionUser();
 
@@ -75,7 +84,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = (await request.json()) as FinancialProfile;
+    const body = financialProfileSchema.parse((await request.json()) as FinancialProfile);
     const pool = getPool();
 
     await pool.query(
@@ -93,6 +102,7 @@ export async function PUT(request: Request) {
           user_id,
           phone_number,
           address,
+          employer_name,
           tax_status,
           frequency,
           salary,
@@ -116,11 +126,12 @@ export async function PUT(request: Request) {
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW()
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW()
         )
         ON CONFLICT (user_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
           address = EXCLUDED.address,
+          employer_name = EXCLUDED.employer_name,
           tax_status = EXCLUDED.tax_status,
           frequency = EXCLUDED.frequency,
           salary = EXCLUDED.salary,
@@ -146,18 +157,19 @@ export async function PUT(request: Request) {
         user.id,
         body.phoneNumber,
         body.address,
+        body.employerName,
         body.taxStatus,
         body.frequency,
         body.salary,
         body.userLocation,
         body.workLocation,
-        body.currentSavings,
-        body.monthlyRent,
-        body.monthlyBills,
+        '',
+        '',
+        '',
         body.monthlyFoodBudget,
         body.monthlyTransport,
         body.monthlyUtilities,
-        body.monthlyInsurance,
+        '',
         body.monthlyPlans,
         body.monthlyDonations,
         body.monthlyEntertainment,
@@ -167,6 +179,10 @@ export async function PUT(request: Request) {
         body.currency,
       ]
     );
+
+    revalidatePath('/profile');
+    revalidatePath('/report');
+    revalidatePath('/setup');
 
     return NextResponse.json({ ok: true });
   } catch (error) {

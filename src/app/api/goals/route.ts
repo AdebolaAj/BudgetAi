@@ -4,7 +4,7 @@ import { getCurrentSessionUser } from '@/lib/auth';
 import { getApiErrorMessage } from '@/lib/apiErrors';
 import { getPool, ensureDatabaseSetup } from '@/lib/db';
 import { getSameOriginError } from '@/lib/requestSecurity';
-import { transactionSchema } from '@/lib/validation';
+import { goalSchema } from '@/lib/validation';
 
 export async function POST(request: Request) {
   try {
@@ -20,44 +20,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = transactionSchema.parse(await request.json());
+    const body = goalSchema.parse(await request.json());
 
-    const entryType = body.entryType;
     const title = body.title.trim();
     const category = body.category.trim();
+    const priority = body.priority;
+    const targetAmount = Number(body.targetAmount);
+    const targetDate = body.targetDate.trim() || null;
     const notes = body.notes.trim();
-    const amount = Number(body.amount);
-    const occurredOn = body.occurredOn.trim();
 
-    if (!title || !category || !occurredOn || amount <= 0) {
+    if (!title || targetAmount <= 0) {
       return NextResponse.json(
-        { error: 'Type, title, category, amount, and date are required.' },
+        { error: 'Goal name and target amount are required.' },
         { status: 400 }
       );
     }
 
-    const pool = getPool();
-    await pool.query(
+    await getPool().query(
       `
-        INSERT INTO transaction_entries (
+        INSERT INTO goals (
           id,
           user_id,
-          entry_type,
           title,
           category,
-          notes,
-          amount,
-          occurred_on
+          priority,
+          target_amount,
+          target_date,
+          notes
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `,
-      [randomUUID(), user.id, entryType, title, category, notes, amount, occurredOn]
+      [randomUUID(), user.id, title, category, priority, targetAmount, targetDate, notes]
     );
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
-      { error: getApiErrorMessage(error, 'Failed to save the transaction entry.') },
+      { error: getApiErrorMessage(error, 'Failed to save the goal.') },
       { status: 500 }
     );
   }

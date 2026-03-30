@@ -32,10 +32,16 @@ export async function ensureDatabaseSetup() {
       id UUID PRIMARY KEY,
       full_name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
+      subscription_plan TEXT NOT NULL DEFAULT 'starter',
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'starter';
   `);
 
   await pool.query(`
@@ -49,10 +55,21 @@ export async function ensureDatabaseSetup() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS rate_limits (
+      key TEXT PRIMARY KEY,
+      count INTEGER NOT NULL DEFAULT 0,
+      window_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      blocked_until TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS financial_profiles (
       user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       phone_number TEXT NOT NULL DEFAULT '',
       address TEXT NOT NULL DEFAULT '',
+      employer_name TEXT NOT NULL DEFAULT '',
       tax_status TEXT NOT NULL DEFAULT '',
       frequency TEXT NOT NULL,
       salary TEXT NOT NULL,
@@ -81,6 +98,7 @@ export async function ensureDatabaseSetup() {
     ALTER TABLE financial_profiles
     ADD COLUMN IF NOT EXISTS phone_number TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS employer_name TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS tax_status TEXT NOT NULL DEFAULT '';
   `);
 
@@ -95,6 +113,22 @@ export async function ensureDatabaseSetup() {
       amount NUMERIC(12, 2) NOT NULL CHECK (amount >= 0),
       occurred_on DATE NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS goals (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT '',
+      priority TEXT NOT NULL DEFAULT 'medium',
+      target_amount NUMERIC(12, 2) NOT NULL CHECK (target_amount > 0),
+      target_date DATE,
+      notes TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 
@@ -136,5 +170,43 @@ export async function ensureDatabaseSetup() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS plaid_accounts (
+      account_id TEXT PRIMARY KEY,
+      plaid_item_id UUID NOT NULL REFERENCES plaid_items(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      institution_name TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL DEFAULT '',
+      mask TEXT NOT NULL DEFAULT '',
+      official_name TEXT NOT NULL DEFAULT '',
+      type TEXT NOT NULL DEFAULT '',
+      subtype TEXT NOT NULL DEFAULT '',
+      available_balance NUMERIC(12, 2),
+      current_balance NUMERIC(12, 2),
+      credit_limit NUMERIC(12, 2),
+      iso_currency_code TEXT NOT NULL DEFAULT 'USD',
+      is_selected BOOLEAN NOT NULL DEFAULT TRUE,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    ALTER TABLE plaid_accounts
+    ADD COLUMN IF NOT EXISTS institution_name TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS mask TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS official_name TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS subtype TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS available_balance NUMERIC(12, 2),
+    ADD COLUMN IF NOT EXISTS current_balance NUMERIC(12, 2),
+    ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12, 2),
+    ADD COLUMN IF NOT EXISTS iso_currency_code TEXT NOT NULL DEFAULT 'USD',
+    ADD COLUMN IF NOT EXISTS is_selected BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
   `);
 }

@@ -37,12 +37,11 @@ export default function Testimonials() {
           <div className="max-w-2xl">
             <span className="section-label text-amber-700">Trusted By Real People</span>
             <h2 className="mt-6 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-              Designed to reduce money stress, not add more dashboards.
+              Proof that clarity matters.
             </h2>
           </div>
           <p className="max-w-xl text-base leading-7 text-slate-700">
-            Early users value the clarity most: cleaner planning, better tradeoff decisions, and a
-            setup experience that actually reflects how they live.
+            Early users mostly respond to the same thing: less guesswork, fewer blind spots, and a dashboard that feels easier to act on.
           </p>
         </div>
 

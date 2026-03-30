@@ -52,11 +52,30 @@ export default function OnboardingForm() {
   const [errorMessage, setErrorMessage] = useState('');
   const [step, setStep] = useState(1);
   const [hasConnectedPlaidItem, setHasConnectedPlaidItem] = useState(false);
+  const [connectedInstitutions, setConnectedInstitutions] = useState<string[]>([]);
   const [activeLocationField, setActiveLocationField] = useState<'userLocation' | 'workLocation' | null>(
     null
   );
 
   const [formData, setFormData] = useState<FinancialProfile>(emptyFinancialProfile);
+
+  const loadPlaidStatus = async () => {
+    const plaidResponse = await fetch('/api/plaid/status', {
+      credentials: 'include',
+    });
+
+    if (!plaidResponse.ok) {
+      return;
+    }
+
+    const plaidData = (await plaidResponse.json()) as {
+      hasConnectedItem?: boolean;
+      institutions?: string[];
+    };
+
+    setHasConnectedPlaidItem(Boolean(plaidData.hasConnectedItem));
+    setConnectedInstitutions(plaidData.institutions ?? []);
+  };
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -84,15 +103,7 @@ export default function OnboardingForm() {
           ...prev,
           ...data.profile,
         }));
-
-        const plaidResponse = await fetch('/api/plaid/status', {
-          credentials: 'include',
-        });
-
-        if (plaidResponse.ok) {
-          const plaidData = (await plaidResponse.json()) as { hasConnectedItem?: boolean };
-          setHasConnectedPlaidItem(Boolean(plaidData.hasConnectedItem));
-        }
+        await loadPlaidStatus();
       } catch (error) {
         console.error('Failed to load saved financial profile:', error);
         setErrorMessage('Failed to load your saved financial profile.');
@@ -133,7 +144,13 @@ export default function OnboardingForm() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          currentSavings: '',
+          monthlyRent: '',
+          monthlyBills: '',
+          monthlyInsurance: '',
+        }),
       });
 
       const data = (await response.json()) as { error?: string };
@@ -142,8 +159,8 @@ export default function OnboardingForm() {
         return;
       }
 
-      router.refresh();
       router.push('/profile');
+      router.refresh();
     } catch (error) {
       console.error('Onboarding error:', error);
       setErrorMessage('Failed to save your financial profile.');
@@ -449,11 +466,39 @@ export default function OnboardingForm() {
                           Plaid Connection
                         </p>
                         <p className="mt-2 text-sm leading-6 text-slate-600">
-                          Connect your bank here if you want BudgetAI to layer in live institution access later.
+                          Connect your banks here so BudgetAI can track your actual accounts, savings,
+                          and transaction history.
                         </p>
                       </div>
-                      <PlaidConnectButton initialHasConnectedItem={hasConnectedPlaidItem} />
+                      <PlaidConnectButton
+                        initialHasConnectedItem={hasConnectedPlaidItem}
+                        onConnected={() => {
+                          void loadPlaidStatus();
+                        }}
+                      />
                     </div>
+
+                    {connectedInstitutions.length > 0 ? (
+                      <div className="mt-5 rounded-[1.5rem] border border-teal-200/80 bg-white/80 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Connected banks
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {connectedInstitutions.map((institution) => (
+                            <span
+                              key={institution}
+                              className="rounded-full bg-teal-950/6 px-3 py-1.5 text-sm font-medium text-teal-800"
+                            >
+                              {institution}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm leading-6 text-slate-500">
+                        No banks connected yet.
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -490,29 +535,29 @@ export default function OnboardingForm() {
                     <p className="mt-2 text-sm leading-6 text-slate-500">{incomeDetails.hint}</p>
                   </div>
 
+                  <div className="md:col-span-2">
+                    <label htmlFor="employerName" className="mb-2 block text-sm font-medium text-slate-700">
+                      Employer Name
+                    </label>
+                    <input
+                      type="text"
+                      id="employerName"
+                      name="employerName"
+                      value={formData.employerName}
+                      onChange={handleChange}
+                      className="input-shell"
+                      placeholder="Acme Inc."
+                    />
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      Optional, but it helps BudgetAI recognize paycheck deposits from Plaid transactions.
+                    </p>
+                  </div>
+
                 </div>
               )}
 
               {step === 3 && (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div>
-                  <label htmlFor="monthlyInsurance" className="mb-2 block text-sm font-medium text-slate-700">
-                    Pre-tax Insurance Premiums
-                  </label>
-                  <input
-                    type="number"
-                    id="monthlyInsurance"
-                    name="monthlyInsurance"
-                    value={formData.monthlyInsurance}
-                    onChange={handleChange}
-                    className="input-shell"
-                    placeholder="200"
-                  />
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Used to reduce taxable pay before estimating take-home income.
-                  </p>
-                </div>
-
                 <div>
                   <label
                     htmlFor="monthlyFoodBudget"
@@ -546,6 +591,24 @@ export default function OnboardingForm() {
                     onChange={handleChange}
                     className="input-shell"
                     placeholder="200"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="monthlyUtilities"
+                    className="mb-2 block text-sm font-medium text-slate-700"
+                  >
+                    Utilities Monthly Cap
+                  </label>
+                  <input
+                    type="number"
+                    id="monthlyUtilities"
+                    name="monthlyUtilities"
+                    value={formData.monthlyUtilities}
+                    onChange={handleChange}
+                    className="input-shell"
+                    placeholder="400"
                   />
                 </div>
 
@@ -597,24 +660,6 @@ export default function OnboardingForm() {
                     onChange={handleChange}
                     className="input-shell"
                     placeholder="100"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="currentSavings"
-                    className="mb-2 block text-sm font-medium text-slate-700"
-                  >
-                    Current Savings
-                  </label>
-                  <input
-                    type="number"
-                    id="currentSavings"
-                    name="currentSavings"
-                    value={formData.currentSavings}
-                    onChange={handleChange}
-                    className="input-shell"
-                    placeholder="10000"
                   />
                 </div>
 
@@ -671,7 +716,7 @@ export default function OnboardingForm() {
           )}
 
           <p className="mt-6 text-sm leading-6 text-slate-500">
-            You can revise these monthly caps later as your income, goals, or spending targets change.
+            BudgetAI now reads current savings from your linked savings accounts, and you can revise these monthly caps later as your goals or spending targets change.
           </p>
         </section>
       </div>

@@ -5,19 +5,20 @@ import { getPool, ensureDatabaseSetup } from '@/lib/db';
 const SESSION_COOKIE_NAME = 'budgetai_session';
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 
-type UserRecord = {
+export type UserRecord = {
   id: string;
   full_name: string;
   email: string;
+  subscription_plan?: string;
 };
 
-function hashPassword(password: string, salt?: string) {
+export function hashPassword(password: string, salt?: string) {
   const passwordSalt = salt ?? randomBytes(16).toString('hex');
   const derivedKey = scryptSync(password, passwordSalt, 64).toString('hex');
   return `${passwordSalt}:${derivedKey}`;
 }
 
-function verifyPassword(password: string, storedHash: string) {
+export function verifyPassword(password: string, storedHash: string) {
   const [salt, hashedPassword] = storedHash.split(':');
   const derivedKey = scryptSync(password, salt, 64);
   const storedKey = Buffer.from(hashedPassword, 'hex');
@@ -141,7 +142,7 @@ export async function getCurrentSessionUser() {
   const pool = getPool();
   const result = await pool.query<UserRecord>(
     `
-      SELECT users.id, users.full_name, users.email
+      SELECT users.id, users.full_name, users.email, users.subscription_plan
       FROM sessions
       JOIN users ON users.id = sessions.user_id
       WHERE sessions.token_hash = $1

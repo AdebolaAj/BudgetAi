@@ -2,6 +2,7 @@ export type FinancialProfile = {
   fullName: string;
   phoneNumber: string;
   address: string;
+  employerName: string;
   taxStatus:
     | ''
     | 'single'
@@ -34,6 +35,7 @@ export type FinancialReport = {
   fullName: string;
   grossMonthlyIncome: number;
   monthlyIncome: number;
+  projectedMonthlyBalance: number;
   estimatedMonthlyTaxes: number;
   estimatedMonthlyStateLocalTaxes: number;
   monthlyPretaxInsurance: number;
@@ -61,11 +63,14 @@ export type FinancialReport = {
 type FinancialReportOptions = {
   monthlyExpensesOverride?: number;
   expenseSourceNote?: string;
+  currentSavingsOverride?: number;
+  monthlyHousingOverride?: number;
 };
 
 export type FinancialProfileRow = {
   phone_number: string;
   address: string;
+  employer_name: string;
   tax_status: FinancialProfile['taxStatus'];
   frequency: FinancialProfile['frequency'];
   salary: string;
@@ -182,10 +187,24 @@ const toNumber = (value: string) => {
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
+export function formatPersonName(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) =>
+      part
+        .toLowerCase()
+        .replace(/(^|[-'])[a-z]/g, (match) => match.toUpperCase())
+    )
+    .join(' ');
+}
+
 export const emptyFinancialProfile: FinancialProfile = {
   fullName: '',
   phoneNumber: '',
   address: '',
+  employerName: '',
   taxStatus: '',
   salary: '',
   frequency: 'monthly',
@@ -222,6 +241,7 @@ export function financialProfileFromRow(
     fullName,
     phoneNumber: row.phone_number,
     address: row.address,
+    employerName: row.employer_name,
     taxStatus: row.tax_status,
     salary: row.salary,
     frequency: row.frequency,
@@ -457,8 +477,6 @@ export function buildFinancialReport(
 ): FinancialReport {
   const grossMonthlyIncome = normalizeMonthlyIncome(profile);
   const grossAnnualIncome = grossMonthlyIncome * 12;
-  const monthlyRent = toNumber(profile.monthlyRent);
-  const monthlyBills = toNumber(profile.monthlyBills);
   const monthlyFoodBudget = toNumber(profile.monthlyFoodBudget);
   const monthlyTransport = toNumber(profile.monthlyTransport);
   const monthlyUtilities = toNumber(profile.monthlyUtilities);
@@ -466,12 +484,11 @@ export function buildFinancialReport(
   const monthlyPlans = toNumber(profile.monthlyPlans);
   const monthlyDonations = toNumber(profile.monthlyDonations);
   const monthlyEntertainment = toNumber(profile.monthlyEntertainment);
-  const currentSavings = toNumber(profile.currentSavings);
+  const currentSavings = options.currentSavingsOverride ?? toNumber(profile.currentSavings);
+  const monthlyHousing = options.monthlyHousingOverride ?? 0;
   const annualSavingsGoal = toNumber(profile.savingsGoal);
   const annualPretaxInsurance = monthlyPretaxInsurance * 12;
   const monthlyCapTotal =
-    monthlyRent +
-    monthlyBills +
     monthlyFoodBudget +
     monthlyTransport +
     monthlyUtilities +
@@ -513,8 +530,8 @@ export function buildFinancialReport(
   const monthlyExpenses = options.monthlyExpensesOverride ?? monthlyCapTotal;
 
   const monthlyBalance = monthlyIncome - monthlyExpenses;
-  const monthlyBudget = monthlyCapTotal + Math.max(annualSavingsGoal / 12, 0);
-  const essentials = monthlyRent + monthlyBills + monthlyUtilities + monthlyFoodBudget + monthlyTransport;
+  const monthlyBudget = monthlyCapTotal + monthlyHousing + Math.max(annualSavingsGoal / 12, 0);
+  const essentials = monthlyHousing + monthlyFoodBudget + monthlyTransport + monthlyUtilities;
   const essentialsShare = monthlyExpenses > 0 ? Math.round((essentials / monthlyExpenses) * 100) : 0;
   const expenseSourceNote = options.expenseSourceNote ?? `${essentialsShare}% of spend is essential`;
   const savingsRate = monthlyIncome > 0 ? Math.round((Math.max(monthlyBalance, 0) / monthlyIncome) * 100) : 0;
@@ -549,9 +566,10 @@ export function buildFinancialReport(
 
   return {
     initials,
-    fullName: profile.fullName || 'BudgetAI User',
+    fullName: formatPersonName(profile.fullName) || 'BudgetAI User',
     grossMonthlyIncome,
     monthlyIncome,
+    projectedMonthlyBalance: monthlyBalance,
     estimatedMonthlyTaxes,
     estimatedMonthlyStateLocalTaxes,
     monthlyPretaxInsurance,
@@ -600,10 +618,13 @@ export function buildFinancialReport(
         note: expenseSourceNote,
       },
       {
-        label: 'Balance',
+        label: 'Projected Balance',
         value: formatCurrency(monthlyBalance, currency),
         tone: monthlyBalance >= 0 ? 'bg-sky-50 text-sky-700' : 'bg-red-50 text-red-700',
-        note: monthlyBalance >= 0 ? 'Available after monthly costs' : 'Current plan runs negative',
+        note:
+          monthlyBalance >= 0
+            ? 'Expected surplus after planned monthly caps'
+            : 'Projected plan runs negative',
       },
       {
         label: 'Monthly Budget',
@@ -611,8 +632,12 @@ export function buildFinancialReport(
         tone: 'bg-rose-50 text-rose-700',
         note:
           annualSavingsGoal > 0
-            ? 'Built from your monthly caps plus savings target pace'
-            : 'Built from your entered monthly caps',
+            ? monthlyHousing > 0
+              ? 'Built from rent, monthly caps, and savings target pace'
+              : 'Built from your monthly caps plus savings target pace'
+            : monthlyHousing > 0
+              ? 'Built from rent and your entered monthly caps'
+              : 'Built from your entered monthly caps',
       },
     ],
   };

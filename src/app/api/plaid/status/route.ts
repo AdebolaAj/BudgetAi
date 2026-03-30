@@ -16,9 +16,21 @@ export async function GET() {
       `SELECT COUNT(*)::text AS total FROM plaid_items WHERE user_id = $1`,
       [user.id]
     );
+    const institutionsResult = await getPool().query<{ institution_name: string }>(
+      `
+        SELECT DISTINCT institution_name
+        FROM plaid_items
+        WHERE user_id = $1
+          AND institution_name IS NOT NULL
+          AND institution_name <> ''
+        ORDER BY institution_name ASC
+      `,
+      [user.id]
+    );
 
     return NextResponse.json({
       hasConnectedItem: Number(result.rows[0]?.total ?? '0') > 0,
+      institutions: institutionsResult.rows.map((row) => row.institution_name),
     });
   } catch (error) {
     return NextResponse.json(

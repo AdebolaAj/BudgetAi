@@ -1,28 +1,7 @@
 import Link from 'next/link';
-import ReportComparisons from '@/components/ReportComparisons';
+import SpendingChartSection from '@/components/SpendingChartSection';
 import { formatCurrency } from '@/lib/financialProfile';
 import { getProfileData } from '@/lib/profileData';
-
-function getBudgetCapForLabel(
-  label: string,
-  budgetCaps: {
-    food: number;
-    transport: number;
-    entertainment: number;
-    subscriptions: number;
-    donations: number;
-  }
-) {
-  const normalized = label.trim().toUpperCase();
-
-  if (normalized.includes('FOOD')) return budgetCaps.food;
-  if (normalized.includes('TRANSPORT') || normalized.includes('TRAVEL')) return budgetCaps.transport;
-  if (normalized.includes('ENTERTAINMENT') || normalized.includes('DINING')) return budgetCaps.entertainment;
-  if (normalized.includes('SUBSCRIPTION')) return budgetCaps.subscriptions;
-  if (normalized.includes('DONATION')) return budgetCaps.donations;
-
-  return null;
-}
 
 export default async function ReportPage() {
   const data = await getProfileData();
@@ -49,9 +28,6 @@ export default async function ReportPage() {
   }
 
   const { profile, report, plaidSpendingBreakdown, comparisonSpending, budgetCaps } = data;
-  const spendingBreakdown = plaidSpendingBreakdown;
-
-  const maxSpendingValue = Math.max(...spendingBreakdown.map((item) => item.value), 1);
   const savingsGoalProgress = report.annualSavingsGoal > 0
     ? Math.min((report.currentSavings / report.annualSavingsGoal) * 100, 100)
     : 0;
@@ -98,7 +74,7 @@ export default async function ReportPage() {
               </h2>
               <p className="mt-3 text-base leading-7 text-slate-700">
                 {report.annualSavingsGoal > 0
-                  ? 'Your current annual savings target based on the onboarding profile.'
+                  ? 'Your current annual savings target against the balances in your linked savings accounts.'
                   : 'Add a savings goal in the financial profile to track progress here.'}
               </p>
 
@@ -111,7 +87,7 @@ export default async function ReportPage() {
                     />
                   </div>
                   <p className="mt-3 text-sm text-slate-600">
-                    {Math.round(savingsGoalProgress)}% of your annual goal is already funded by current savings.
+                    {Math.round(savingsGoalProgress)}% of your annual goal is already funded by linked savings balances.
                   </p>
                 </>
               )}
@@ -132,7 +108,7 @@ export default async function ReportPage() {
               <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="rounded-[1.5rem] bg-white p-5 shadow-sm">
                   <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Monthly surplus
+                    Projected surplus
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-slate-950">
                     {formatCurrency(report.monthlyBalance, profile.currency)}
@@ -149,74 +125,14 @@ export default async function ReportPage() {
               </div>
             </div>
           </div>
-
-          <div className="surface-card rounded-[2.5rem] p-8">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  Monthly spending
-                </p>
-                <h2 className="mt-3 text-3xl font-semibold text-slate-950">Where the money goes.</h2>
-              </div>
-              <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-                Total {formatCurrency(report.monthlyExpenses, profile.currency)}
-              </div>
-            </div>
-
-            <div className="mt-8 space-y-5">
-              {spendingBreakdown.length > 0 ? (
-                spendingBreakdown.map((item) => {
-                  const budgetValue = getBudgetCapForLabel(item.label, budgetCaps) ?? 0;
-                  const hasExpectedCap = budgetValue > 0;
-                  const isOverBudget = hasExpectedCap ? item.value > budgetValue : false;
-                  const overBy = isOverBudget ? item.value - budgetValue : 0;
-
-                  return (
-                  <div key={item.label}>
-                    <div className="mb-2 flex items-center justify-between gap-4">
-                      <p className="text-sm font-medium text-slate-700">{item.label}</p>
-                      <p className={`text-sm font-semibold ${isOverBudget ? 'text-red-700' : 'text-slate-950'}`}>
-                        {formatCurrency(item.value, profile.currency)}
-                      </p>
-                    </div>
-                    <div className="h-3 rounded-full bg-slate-100">
-                      <div
-                        className={
-                          isOverBudget
-                            ? 'h-3 rounded-full bg-gradient-to-r from-red-500 to-rose-500'
-                            : 'h-3 rounded-full bg-gradient-to-r from-teal-600 to-emerald-500'
-                        }
-                        style={{ width: `${Math.max((item.value / maxSpendingValue) * 100, 10)}%` }}
-                      />
-                    </div>
-                    {hasExpectedCap ? (
-                      <p className={`mt-2 text-sm ${isOverBudget ? 'text-red-700' : 'text-slate-500'}`}>
-                        {isOverBudget
-                          ? `Expected cap ${formatCurrency(budgetValue, profile.currency)} • Over by ${formatCurrency(overBy, profile.currency)}`
-                          : `Expected cap ${formatCurrency(budgetValue, profile.currency)}`}
-                      </p>
-                    ) : null}
-                  </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-[1.75rem] bg-white p-6 text-slate-600 shadow-sm">
-                  Connect Plaid and sync transactions to populate the monthly spending chart from actual account history.
-                </div>
-              )}
-            </div>
-          </div>
+          <SpendingChartSection
+            currency={profile.currency}
+            breakdowns={plaidSpendingBreakdown}
+            comparisonSpending={comparisonSpending}
+            budgetCaps={budgetCaps}
+          />
         </section>
 
-        <ReportComparisons
-          currency={profile.currency}
-          monthlyIncome={report.monthlyIncome}
-          monthlyExpenses={report.monthlyExpenses}
-          monthlyBalance={report.monthlyBalance}
-          annualSavingsGoal={report.annualSavingsGoal}
-          currentSavings={report.currentSavings}
-          comparisonSpending={comparisonSpending}
-        />
       </div>
     </main>
   );

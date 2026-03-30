@@ -9,9 +9,9 @@ import SignUp from '@/components/SignUp';
 import Testimonials from '@/components/Testimonials';
 
 const metrics = [
-  { label: 'Average savings uplift', value: '18%' },
   { label: 'Setup time', value: '7 min' },
-  { label: 'Recurring expense visibility', value: '92%' },
+  { label: 'Accounts supported', value: 'Multi-bank' },
+  { label: 'Planning mode', value: 'Live + manual' },
 ];
 
 export default function Home() {
@@ -40,11 +40,11 @@ export default function Home() {
           <div className="glass-panel overflow-hidden rounded-[2.5rem] px-6 py-10 sm:px-10 sm:py-12">
             <span className="section-label text-teal-800">AI-Powered Budgeting</span>
             <h1 className="mt-8 max-w-4xl text-5xl font-semibold leading-[1.02] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
-              Make your money plan feel intentional.
+              See where your money goes, then plan what happens next.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700 sm:text-xl">
-              BudgetAI turns income, fixed costs, and savings goals into a cleaner financial rhythm.
-              It is practical enough for daily use and polished enough to feel worth returning to.
+              BudgetAI connects your accounts, tracks real spending, and turns your financial profile
+              into a clearer monthly plan.
             </p>
 
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
@@ -79,7 +79,7 @@ export default function Home() {
                   <p className="text-sm font-semibold uppercase tracking-[0.22em] text-teal-700">
                     Monthly Snapshot
                   </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-slate-950">Cash flow at a glance</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-slate-950">One clear monthly view</h2>
                 </div>
                 <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-bold text-amber-700">
                   Stable
@@ -109,27 +109,25 @@ export default function Home() {
             </div>
 
             <div className="surface-card rounded-[2.5rem] p-6">
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
-                What You Get
-              </p>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">What You Get</p>
               <ul className="mt-5 space-y-4 text-slate-700">
                 <li className="flex items-start gap-3">
                   <span className="mt-1 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-bold text-teal-700">
                     01
                   </span>
-                  Personalized onboarding that captures how you actually spend.
+                  One onboarding flow for salary, goals, caps, and account connections.
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="mt-1 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-bold text-teal-700">
                     02
                   </span>
-                  Clear profile summaries for income, expenses, balance, and future goals.
+                  Live transaction tracking that shows spending, rent, utilities, and savings in context.
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="mt-1 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-bold text-teal-700">
                     03
                   </span>
-                  A calmer visual design that feels more like a product and less like a template.
+                  Focused planning tools for goals, reports, and deeper AI guidance when you need it.
                 </li>
               </ul>
             </div>
@@ -139,27 +137,6 @@ export default function Home() {
 
       <Description />
       <Testimonials />
-
-      <section className="px-4 pb-24">
-        <div className="mx-auto max-w-6xl">
-          <div className="glass-panel rounded-[2.75rem] px-8 py-12 text-center sm:px-14">
-            <span className="section-label text-teal-800">Ready To Start</span>
-            <h2 className="mt-6 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-              Build a budget that can keep up with real life.
-            </h2>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-700">
-              Create your account, complete the guided setup, and move into a cleaner financial
-              dashboard in a few minutes.
-            </p>
-            <button
-              onClick={() => setSignUpOpen(true)}
-              className="primary-button mt-8 px-8 py-4 text-base"
-            >
-              Create Your Free Account
-            </button>
-          </div>
-        </div>
-      </section>
 
       <footer className="px-4 pb-12">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 rounded-[2rem] border border-slate-900/8 bg-slate-950 px-8 py-8 text-slate-300 md:flex-row md:items-end md:justify-between">

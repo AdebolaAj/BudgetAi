@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { formatCurrency } from '@/lib/financialProfile';
 
-type RangeKey = 'monthly' | '3months' | '6months' | 'yearly';
+type RangeKey = 'monthly' | '3months' | '6months' | 'yearly' | 'ytd';
 
 const rangeOptions: Array<{ key: RangeKey; label: string; months: number }> = [
   { key: 'monthly', label: 'Monthly', months: 1 },
   { key: '3months', label: '3 Months', months: 3 },
   { key: '6months', label: '6 Months', months: 6 },
   { key: 'yearly', label: 'Yearly', months: 12 },
+  { key: 'ytd', label: 'Year to Date', months: new Date().getMonth() + 1 },
 ];
 
 type ReportComparisonsProps = {
@@ -24,6 +25,7 @@ type ReportComparisonsProps = {
     threeMonths: number;
     sixMonths: number;
     yearly: number;
+    yearToDate: number;
   };
 };
 
@@ -47,7 +49,9 @@ export default function ReportComparisons({
         ? comparisonSpending?.threeMonths
         : selectedRange === '6months'
           ? comparisonSpending?.sixMonths
-          : comparisonSpending?.yearly;
+          : selectedRange === 'yearly'
+            ? comparisonSpending?.yearly
+            : comparisonSpending?.yearToDate;
   const expenses = plaidRangeExpenses && plaidRangeExpenses > 0
     ? plaidRangeExpenses
     : monthlyExpenses * currentRange.months;
